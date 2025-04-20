@@ -2,6 +2,8 @@
 
 Um aplicativo web simples para pesquisar filmes e séries usando a API do The Movie Database (TMDb).
 
+acesse aqui : https://gasilsantos.github.io/CineScope/
+
 ## Funcionalidades
 
 *   Navegação entre **Filmes Populares** e **Séries Populares**.
