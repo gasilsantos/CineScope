@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CineScope</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Estilos customizados podem ser adicionados aqui se necessário */
+        body {
+            background-color: #111827; /* bg-gray-900 */
+        }
+        .movie-card {
+            transition: transform 0.3s ease;
+        }
+        .movie-card:hover {
+            transform: scale(1.05);
+        }
+        .nav-button.active {
+             background-color: #3b82f6; /* bg-blue-600 */
+             color: white;
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <!-- Cabeçalho -->
+    <header class="bg-gray-800 py-4 shadow-lg">
+        <nav class="container mx-auto px-4 flex flex-col sm:flex-row justify-between items-center">
+            <h1 id="app-title" class="text-3xl font-bold text-blue-500 mb-4 sm:mb-0 cursor-pointer">CineScope</h1>
+            <div class="flex items-center space-x-4">
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        placeholder="Buscar filme ou série..."
+                        class="bg-gray-700 text-white px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+                    >
+                    <button id="search-button" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Navegação Principal -->
+    <section class="container mx-auto px-4 pt-6 flex flex-col sm:flex-row flex-wrap justify-center items-center gap-4">
+         <button id="popular-movies-btn" class="nav-button bg-gray-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full active">
+             <i class="fas fa-fire mr-1"></i> Populares
+         </button>
+         <button id="upcoming-movies-btn" class="nav-button bg-gray-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full">
+             <i class="fas fa-calendar-alt mr-1"></i> Em Breve (Filmes)
+         </button>
+         <button id="popular-tv-btn" class="nav-button bg-gray-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full">
+             <i class="fas fa-tv mr-1"></i> Populares (Séries)
+         </button>
+         <button id="airing-today-tv-btn" class="nav-button bg-gray-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full">
+             <i class="fas fa-broadcast-tower mr-1"></i> No Ar Hoje (Séries)
+         </button>
+         <button id="favorites-btn" class="nav-button bg-gray-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full">
+             <i class="fas fa-heart mr-1"></i> Favoritos
+         </button>
+         <!-- Filtro de Gênero (Apenas para Populares) -->
+         <div id="genre-filter-container" class="relative">
+            <select id="genre-filter" class="bg-gray-700 text-white py-2 pl-4 pr-8 rounded-full appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <!-- Opções de gênero serão inseridas aqui -->
+            </select>
+            <i class="fas fa-chevron-down absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+         </div>
+    </section>
+
+    <!-- Conteúdo Principal -->
+    <main class="container mx-auto px-4 py-8">
+        <h2 id="section-title" class="text-2xl font-semibold mb-6 text-center">Filmes Populares</h2>
+        
+        <!-- Grid para mostrar filmes/séries -->
+        <div id="results-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <!-- Cards de filmes/séries serão inseridos aqui pelo JavaScript -->
+        </div>
+
+        <!-- Controles de Paginação -->
+        <div id="pagination-controls" class="flex justify-center items-center space-x-4 mt-8">
+            <button id="prev-page-btn" class="bg-gray-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                &lt; Anterior
+            </button>
+            <span id="page-indicator" class="text-lg">Página 1</span>
+            <button id="next-page-btn" class="bg-gray-700 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                Próxima &gt;
+            </button>
+        </div>
+
+        <!-- Seção de Detalhes (inicialmente oculta) -->
+        <div id="details-section" class="mt-12 hidden bg-gray-800 p-8 rounded-lg shadow-xl">
+            <!-- Detalhes serão inseridos aqui -->
+            <div id="details-content">
+                <!-- Conteúdo principal dos detalhes (poster, texto, trailer) -->
+            </div>
+            <!-- Trailer foi movido para dentro de details-content -->
+            
+            <!-- Seção de Recomendações -->
+            <div id="recommendations-section" class="mt-12 border-t border-gray-700 pt-8">
+                 <!-- Recomendações serão inseridas aqui -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="bg-gray-800 text-gray-400 text-center py-4 mt-12">
+        <p>Copyright © 2024 CineScope. Todos os direitos reservados.</p>
+        <p>Dados fornecidos por <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:underline">TMDb</a>.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html> 
