@@ -19,8 +19,9 @@ const genreFilter = document.getElementById('genre-filter');
 const favoritesBtn = document.getElementById('favorites-btn'); // Botão Favoritos
 const upcomingMoviesBtn = document.getElementById('upcoming-movies-btn'); // Botão Em Breve
 const airingTodayTvBtn = document.getElementById('airing-today-tv-btn'); // Botão No Ar Hoje
+const popularActorsBtn = document.getElementById('popular-actors-btn'); // Botão Atores Populares
 
-let currentView = 'movies'; // Controla a visualização atual ('movies', 'tv', 'search')
+let currentView = 'movies'; // Controla a visualização atual ('movies', 'tv', 'search', 'actors', 'favorites')
 let currentPage = 1;
 let totalPages = 1;
 let lastSearchQuery = '';
@@ -192,20 +193,56 @@ function createMovieCard(item) {
     // Evento de clique no card (exceto no botão)
     card.addEventListener('click', (event) => {
         // Não abre detalhes se o clique foi no botão de favorito
-        if (!event.target.closest('.favorite-btn')) { 
-            showDetails(itemId, mediaType);
+        if (!event.target.closest('.favorite-btn')) {
+            // Certifica que o item tem 'id' e ('title' ou 'name') antes de tentar mostrar detalhes
+            if (item.id && (item.title || item.name)) {
+                const mediaType = item.media_type || (item.title ? 'movie' : 'tv');
+                showDetails(item.id, mediaType);
+            } else {
+                 console.log("Não é possível mostrar detalhes para este item:", item);
+            }
         }
     });
 
     // Configura botão de favorito
     const favButton = card.querySelector('.favorite-btn');
-    updateFavoriteButtonState(favButton, isFavorite(itemId, mediaType)); // Define estado inicial
-    
-    favButton?.addEventListener('click', (event) => {
-        event.stopPropagation(); // Impede que o clique no botão abra os detalhes
-        toggleFavorite(itemId, mediaType, favButton);
-    });
+    // Só adiciona botão de favorito se não for um ator
+    if (mediaType !== 'person' && favButton) {
+         updateFavoriteButtonState(favButton, isFavorite(itemId, mediaType)); // Define estado inicial
+         favButton.addEventListener('click', (event) => {
+             event.stopPropagation(); // Impede que o clique no botão abra os detalhes
+             toggleFavorite(itemId, mediaType, favButton);
+         });
+    } else if (favButton) {
+        favButton.style.display = 'none'; // Esconde o botão para atores
+    }
 
+    return card;
+}
+
+// Função para criar o card de um ator
+function createActorCard(actor) {
+    const card = document.createElement('div');
+    card.classList.add('movie-card', 'bg-gray-800', 'rounded-lg', 'overflow-hidden', 'shadow-lg', 'cursor-pointer'); // Adiciona cursor-pointer
+
+    const profilePath = actor.profile_path ? `${imageBaseUrl}${actor.profile_path}` : 'https://via.placeholder.com/500x750?text=No+Image';
+    const name = actor.name;
+    const knownFor = actor.known_for?.map(item => item.title || item.name).join(', ') || 'N/A';
+
+    card.innerHTML = `
+        <img
+            src="${profilePath}"
+            alt="Foto de ${name}"
+            class="w-full h-auto object-cover bg-gray-700"
+            loading="lazy"
+            width="500" height="750">
+        <div class="p-4">
+            <h3 class="text-lg font-semibold mb-2 truncate">${name}</h3>
+            <p class="text-sm text-gray-400 truncate" title="Conhecido(a) por: ${knownFor}">Conhecido(a) por: ${knownFor}</p>
+        </div>
+    `;
+    // Adiciona evento de clique para mostrar detalhes do ator
+    card.addEventListener('click', () => showActorDetails(actor.id));
     return card;
 }
 
@@ -255,26 +292,60 @@ function createRecommendationCard(item) {
     return card;
 }
 
-// Função para exibir os resultados na grade
-function displayResults(items, page, totalPgs) {
-    resultsGrid.innerHTML = ''; // Limpa resultados anteriores
-    currentPage = page;
-    totalPages = totalPgs;
+// Função genérica para exibir resultados na grade
+function displayResults(items, page, totalPgs, mediaType = 'movie') { // Adiciona mediaType
+    resultsGrid.innerHTML = ''; // Limpa grid
+    hideDetails(); // Esconde detalhes ao mudar de página/seção
 
     if (!items || items.length === 0) {
-        resultsGrid.innerHTML = '<p class="text-center col-span-full">Nenhum resultado encontrado.</p>';
-        paginationControls.classList.add('hidden'); // Esconde paginação se não houver resultados
+        resultsGrid.innerHTML = '<p class="text-gray-400 text-center col-span-full">Nenhum resultado encontrado.</p>';
+        paginationControls.classList.add('hidden'); // Esconde paginação se não há resultados
         return;
     }
-    
+
     items.forEach(item => {
-        // Ignora pessoas nos resultados de busca multi
-        if (item.media_type === 'person') return; 
-        const card = createMovieCard(item);
-        resultsGrid.appendChild(card);
+        let card;
+        // Determina o tipo do item individualmente, especialmente para busca 'multi'
+        let itemMediaType = item.media_type; 
+
+        // Se a view geral não especifica o tipo (como em 'search' ou 'favorites'),
+        // ou se o tipo do item difere (ex: busca retorna ator e filme),
+        // usa o media_type do item.
+        let finalMediaType = (mediaType === 'search' || mediaType === 'favorites') ? itemMediaType : mediaType;
+        
+        // Se mesmo assim não houver tipo (ex: item de API malformado), tenta deduzir
+        if (!finalMediaType) {
+            if (item.title) finalMediaType = 'movie';
+            else if (item.name && item.profile_path) finalMediaType = 'person'; 
+            else if (item.name) finalMediaType = 'tv'; // Suposição menos segura
+        }
+
+        if (finalMediaType === 'person') { 
+            card = createActorCard(item);
+        } else if (finalMediaType === 'movie' || finalMediaType === 'tv') {
+            card = createMovieCard(item);
+        } else {
+            // Ignora item se o tipo não for reconhecido
+            console.warn('Item com media_type desconhecido/inválido ignorado:', item);
+            return; // Pula para o próximo item
+        }
+
+        if (card) { // Garante que um card foi criado
+            resultsGrid.appendChild(card);
+        }
     });
 
-    updatePaginationControls(); // Atualiza e mostra os controles
+    currentPage = page;
+    totalPages = totalPgs > 500 ? 500 : totalPgs; // Limita a 500 páginas conforme API TMDb
+
+    updatePaginationControls();
+    // Mostra controles de paginação apenas se houver mais de uma página
+    if (totalPages > 1) {
+         paginationControls.classList.remove('hidden');
+    } else {
+        paginationControls.classList.add('hidden');
+    }
+    resultsGrid.classList.remove('hidden'); // Mostra a grade
 }
 
 // Função para carregar a página de Favoritos
@@ -311,13 +382,17 @@ async function loadFavoritesPage() {
          }));
 
         // Reusa displayResults para exibir os cards (sem paginação)
-        displayResults(itemsToDisplay, 1, 1);
+        displayResults(itemsToDisplay, 1, 1, 'favorites');
         paginationControls.classList.add('hidden'); // Garante que paginação está oculta
 
     } catch (error) {
         console.error("Erro ao carregar detalhes dos favoritos:", error);
         resultsGrid.innerHTML = '<p class="text-red-500 text-center col-span-full">Erro ao carregar favoritos.</p>';
     }
+
+    populateGenreFilter('movie'); // Restaura filtro para filmes por padrão
+    genreFilterContainer.classList.add('hidden'); // Esconde filtro na página de favoritos
+    paginationControls.classList.add('hidden'); // Esconde paginação na página de favoritos
 }
 
 // Função para buscar e exibir filmes populares (com filtro de gênero)
@@ -342,7 +417,12 @@ async function loadPopularMovies(page = 1, genreId = '') {
     }
 
     if (data) {
-        displayResults(data.results, data.page, data.total_pages);
+        currentView = 'movies';
+        displayResults(data.results, data.page, data.total_pages, 'movie');
+        sectionTitle.textContent = 'Filmes Populares';
+        populateGenreFilter('movie'); // Garante que o filtro de gênero de filmes está visível/populado
+        genreFilterContainer.classList.remove('hidden'); // Mostra o filtro
+        setActiveButton(popularMoviesBtn);
     } else {
          resultsGrid.innerHTML = '<p class="text-red-500 text-center col-span-full">Erro ao carregar filmes.</p>';
          paginationControls.classList.add('hidden');
@@ -361,7 +441,11 @@ async function loadUpcomingMovies(page = 1) {
 
     const data = await fetchTMDb('movie/upcoming', { page: page });
     if (data) {
-        displayResults(data.results, data.page, data.total_pages);
+        currentView = 'movies';
+        displayResults(data.results, data.page, data.total_pages, 'movie');
+        sectionTitle.textContent = 'Em Breve (Filmes)';
+        genreFilterContainer.classList.add('hidden'); // Esconde filtro para "Em Breve"
+        setActiveButton(upcomingMoviesBtn);
     } else {
          resultsGrid.innerHTML = '<p class="text-red-500 text-center col-span-full">Erro ao carregar filmes em breve.</p>';
          paginationControls.classList.add('hidden');
@@ -390,7 +474,12 @@ async function loadPopularTvShows(page = 1, genreId = '') {
     }
     
     if (data) {
-        displayResults(data.results, data.page, data.total_pages);
+        currentView = 'tv';
+        displayResults(data.results, data.page, data.total_pages, 'tv');
+        sectionTitle.textContent = 'Séries Populares';
+        populateGenreFilter('tv'); // Garante que o filtro de gênero de TV está visível/populado
+        genreFilterContainer.classList.remove('hidden'); // Mostra o filtro
+        setActiveButton(popularTvBtn);
     } else {
          resultsGrid.innerHTML = '<p class="text-red-500 text-center col-span-full">Erro ao carregar séries.</p>';
          paginationControls.classList.add('hidden');
@@ -409,10 +498,29 @@ async function loadAiringTodayTvShows(page = 1) {
 
     const data = await fetchTMDb('tv/airing_today', { page: page }); 
     if (data) {
-        displayResults(data.results, data.page, data.total_pages);
+        currentView = 'tv';
+        displayResults(data.results, data.page, data.total_pages, 'tv');
+        sectionTitle.textContent = 'No Ar Hoje (Séries)';
+        genreFilterContainer.classList.add('hidden'); // Esconde filtro para "No Ar Hoje"
+        setActiveButton(airingTodayTvBtn);
     } else {
          resultsGrid.innerHTML = '<p class="text-red-500 text-center col-span-full">Erro ao carregar séries no ar hoje.</p>';
          paginationControls.classList.add('hidden');
+    }
+}
+
+// Função para buscar e exibir atores populares
+async function loadPopularActors(page = 1) {
+    currentView = 'actors';
+    displayGridSkeleton(); // Mostra esqueletos enquanto carrega
+    hideDetails();
+    genreFilterContainer.classList.add('hidden'); // Esconde filtro de gênero
+
+    const data = await fetchTMDb('person/popular', { page });
+    if (data) {
+        displayResults(data.results, data.page, data.total_pages, 'person'); // Passa 'person' como mediaType
+        sectionTitle.textContent = 'Atores Populares';
+        setActiveButton(popularActorsBtn);
     }
 }
 
@@ -435,13 +543,12 @@ async function searchItems(query, page = 1) {
     
     const data = await fetchTMDb('search/multi', { query: query, page: page }); 
     if (data) {
-        // Verifica se há resultados antes de chamar displayResults
-        if (data.results && data.results.length > 0) {
-             displayResults(data.results, data.page, data.total_pages);
-        } else {
-             resultsGrid.innerHTML = `<p class="text-center col-span-full">Nenhum resultado encontrado para "${query}".</p>`;
-             paginationControls.classList.add('hidden');
-        }
+        currentView = 'search';
+        lastSearchQuery = query;
+        displayResults(data.results, data.page, data.total_pages, 'search'); // 'search' ou tipo detectado?
+        sectionTitle.textContent = `Resultados para "${query}"`;
+        genreFilterContainer.classList.add('hidden'); // Esconde filtro na busca
+        clearActiveButton(); // Limpa botão ativo durante a busca
     } else {
         resultsGrid.innerHTML = `<p class="text-red-500 text-center col-span-full">Erro ao buscar por "${query}".</p>`;
         paginationControls.classList.add('hidden');
@@ -667,23 +774,26 @@ function displayDetails(details, credits, trailer, mediaType, recommendations) {
 
 // Função auxiliar para marcar o botão ativo
 function setActiveButton(activeButton) {
-    popularMoviesBtn.classList.remove('active');
-    upcomingMoviesBtn.classList.remove('active'); // Inclui Em Breve
-    popularTvBtn.classList.remove('active');
-    airingTodayTvBtn.classList.remove('active'); // Inclui No Ar Hoje
-    favoritesBtn.classList.remove('active'); 
-    if(activeButton){
+    // Remove 'active' de todos os botões de navegação
+    document.querySelectorAll('.nav-button').forEach(button => {
+        button.classList.remove('active');
+        button.classList.replace('bg-blue-600', 'bg-gray-700'); // Garante reset do background
+    });
+    // Adiciona 'active' ao botão clicado
+    if (activeButton) {
         activeButton.classList.add('active');
+         // Aplica estilo ativo (Tailwind não sobrescreve hover por padrão, forçar troca)
+         activeButton.classList.replace('bg-gray-700', 'bg-blue-600');
     }
 }
 
 // Função auxiliar para limpar o botão ativo 
 function clearActiveButton() {
-    popularMoviesBtn.classList.remove('active');
-    upcomingMoviesBtn.classList.remove('active'); // Inclui Em Breve
-    popularTvBtn.classList.remove('active');
-    airingTodayTvBtn.classList.remove('active'); // Inclui No Ar Hoje
-    favoritesBtn.classList.remove('active'); 
+    // Remove 'active' de todos os botões de navegação
+    document.querySelectorAll('.nav-button').forEach(button => {
+        button.classList.remove('active');
+        button.classList.replace('bg-blue-600', 'bg-gray-700'); // Garante reset do background
+    });
 }
 
 // Função auxiliar para atualizar os controles de paginação
@@ -759,6 +869,8 @@ prevPageBtn.addEventListener('click', () => {
             loadAiringTodayTvShows(currentPage - 1);
         } else if (currentView === 'search') {
             searchItems(lastSearchQuery, currentPage - 1);
+        } else if (currentView === 'actors') {
+            loadPopularActors(currentPage - 1);
         }
         window.scrollTo(0, 0); // Rola para o topo
     }
@@ -776,6 +888,8 @@ nextPageBtn.addEventListener('click', () => {
            loadAiringTodayTvShows(currentPage + 1);
         } else if (currentView === 'search') {
             searchItems(lastSearchQuery, currentPage + 1);
+        } else if (currentView === 'actors') {
+            loadPopularActors(currentPage + 1);
         }
         window.scrollTo(0, 0); // Rola para o topo
     }
@@ -792,6 +906,10 @@ popularTvBtn.addEventListener('click', () => {
     loadPopularTvShows(1, selectedGenreId);
 });   
 airingTodayTvBtn.addEventListener('click', () => loadAiringTodayTvShows(1)); // Chama nova função
+popularActorsBtn.addEventListener('click', () => {
+    selectedGenreId = ''; // Atores não usam filtro de gênero
+    loadPopularActors();
+});
 
 // Listener para o título do app (reseta o gênero selecionado e vai para Pop Filmes)
 appTitle.addEventListener('click', () => {
@@ -823,3 +941,177 @@ document.addEventListener('DOMContentLoaded', async () => {
     await fetchGenres(); 
     loadPopularMovies(1); 
 }); 
+
+// Função para esconder a seção de detalhes
+function hideDetails() {
+    detailsSection.classList.add('hidden');
+    resultsGrid.classList.remove('hidden');
+    paginationControls.classList.add('hidden');
+}
+
+// Função de inicialização
+async function init() {
+    favorites = getFavoritesFromStorage(); // Carrega favoritos do localStorage
+    addEventListeners();
+    await fetchGenres(); // Busca gêneros primeiro para popular o filtro
+    loadPopularMovies(); // Carrega filmes populares por padrão ao iniciar
+}
+
+// Inicia a aplicação quando o DOM estiver pronto
+document.addEventListener('DOMContentLoaded', init); 
+
+// --- Funções de Detalhes ---
+
+// Busca e prepara dados para exibir detalhes de ATORES
+async function showActorDetails(actorId) {
+    console.log(`Buscando detalhes para Ator com ID: ${actorId}`);
+    detailsSection.classList.remove('hidden');
+    resultsGrid.classList.add('hidden');
+    paginationControls.classList.add('hidden');
+    sectionTitle.textContent = 'Detalhes do Ator'; // Atualiza título
+    clearActiveButton(); // Limpa botão ativo da navegação
+    genreFilterContainer.classList.add('hidden'); // Esconde filtro
+    detailsSection.style.backgroundImage = 'none'; // Sem imagem de fundo por padrão para atores
+    displayDetailsSkeleton(); // Mostra um esqueleto genérico enquanto carrega
+    detailsSection.scrollIntoView({ behavior: 'smooth' });
+
+    try {
+        const [details, combinedCredits] = await Promise.all([
+            fetchTMDb(`person/${actorId}`),
+            fetchTMDb(`person/${actorId}/combined_credits`)
+        ]);
+
+        if (details && combinedCredits) {
+            displayActorDetails(details, combinedCredits);
+        } else {
+            throw new Error('Falha ao carregar detalhes ou créditos do ator.');
+        }
+    } catch (error) {
+        console.error("Erro ao buscar dados de detalhes do ator:", error);
+        const detailsContent = document.getElementById('details-content');
+        const recommendationsSection = document.getElementById('recommendations-section');
+        if(detailsContent) {
+             detailsContent.innerHTML = '<p class="text-red-500 text-center">Erro ao carregar detalhes do ator.</p>';
+        }
+        if(recommendationsSection) {
+            recommendationsSection.innerHTML = ''; // Limpa seção inferior
+            recommendationsSection.classList.add('hidden');
+        }
+    }
+}
+
+// Exibe os detalhes formatados de ATORES na seção
+function displayActorDetails(details, combinedCredits) {
+    const detailsSectionContent = document.getElementById('details-content');
+    const recommendationsSection = document.getElementById('recommendations-section');
+    detailsSectionContent.innerHTML = '';
+    recommendationsSection.innerHTML = ''; // Limpa e esconde seção de recomendações
+    recommendationsSection.classList.add('hidden');
+
+    const name = details.name;
+    const profilePath = details.profile_path ? `${imageBaseUrl}${details.profile_path}` : 'https://via.placeholder.com/500x750?text=No+Image';
+    const biography = details.biography || 'Biografia não disponível.';
+    const birthday = details.birthday ? new Date(details.birthday).toLocaleDateString('pt-BR') : 'N/A';
+    const placeOfBirth = details.place_of_birth || 'N/A';
+    const knownForDept = details.known_for_department || 'N/A';
+
+    // Processar créditos (separar filmes e séries, ordenar por popularidade ou data)
+    const creditsList = combinedCredits.cast
+        ?.filter(credit => credit.poster_path) // Filtra itens sem poster
+        .sort((a, b) => b.popularity - a.popularity) // Ordena por popularidade
+        .slice(0, 20); // Limita a 20 itens
+
+    let detailsHTML = `
+        <div class="flex flex-col md:flex-row gap-8">
+            <img src="${profilePath}" alt="Foto de ${name}" 
+                 class="w-full md:w-[30%] rounded-lg shadow-md self-start">
+            <div class="md:w-[70%]">
+                <h2 class="text-3xl font-bold mb-4">${name}</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 text-sm">
+                    <div><strong>Conhecido(a) por:</strong> ${knownForDept}</div>
+                    <div><strong>Nascimento:</strong> ${birthday}</div>
+                    <div><strong>Local de Nascimento:</strong> ${placeOfBirth}</div>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Biografia</h3>
+                <p class="mb-6 text-gray-300 text-sm max-h-48 overflow-y-auto pr-2">${biography}</p>
+                
+                <button id="back-button" class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">Voltar</button>
+            </div>
+        </div>
+    `;
+
+    // Seção de Filmografia
+    if (creditsList && creditsList.length > 0) {
+        detailsHTML += `
+            <div class="mt-12 border-t border-gray-700 pt-8">
+                <h3 class="text-2xl font-semibold mb-6">Conhecido(a) por:</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    ${creditsList.map(credit => {
+                        const creditPosterPath = `${imageBaseUrl}${credit.poster_path}`;
+                        const creditTitle = credit.title || credit.name;
+                        const creditYear = (credit.release_date || credit.first_air_date)?.substring(0, 4) || '';
+                        const creditMediaType = credit.media_type;
+                        return `
+                            <div class="movie-card bg-gray-700 rounded-lg overflow-hidden shadow-md cursor-pointer" 
+                                 onclick="showDetails(${credit.id}, '${creditMediaType}')" 
+                                 title="${creditTitle} ${creditYear ? '(' + creditYear + ')' : ''}">
+                                <img src="${creditPosterPath}" alt="${creditTitle}" class="w-full h-auto object-cover bg-gray-600" loading="lazy">
+                                <div class="p-2">
+                                    <h4 class="text-sm font-semibold truncate">${creditTitle}</h4>
+                                    ${creditYear ? `<p class="text-xs text-gray-400">${creditYear}</p>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    detailsSectionContent.innerHTML = detailsHTML;
+
+    // Adiciona evento ao botão Voltar GERAL
+    addBackButtonListener();
+}
+
+// Adiciona listener ao botão Voltar na seção de detalhes
+function addBackButtonListener() {
+    const backButton = document.getElementById('back-button');
+    if (backButton) {
+        // Remove listener antigo para evitar duplicação
+        backButton.replaceWith(backButton.cloneNode(true)); 
+        document.getElementById('back-button').addEventListener('click', () => {
+            detailsSection.classList.add('hidden');
+            detailsSection.style.backgroundImage = 'none';
+            resultsGrid.classList.remove('hidden');
+
+            // Volta para a visualização correta na página/gênero/ator/busca em que estava
+            switch (currentView) {
+                case 'movies':
+                    loadPopularMovies(currentPage, selectedGenreId);
+                    break;
+                case 'tv':
+                    loadPopularTvShows(currentPage, selectedGenreId);
+                    break;
+                case 'upcomingMovies':
+                    loadUpcomingMovies(currentPage);
+                    break;
+                case 'airingTodayTv':
+                    loadAiringTodayTvShows(currentPage);
+                    break;
+                case 'favorites':
+                    loadFavoritesPage(); // Favoritos não têm paginação
+                    break;
+                case 'search':
+                    searchItems(lastSearchQuery, currentPage);
+                    break;
+                case 'actors': // Adiciona caso para voltar para atores
+                    loadPopularActors(currentPage);
+                    break;
+                default:
+                    loadPopularMovies(1, ''); // Fallback
+            }
+            // A paginação será exibida corretamente pela função de load chamada
+        });
+    }
+} 
